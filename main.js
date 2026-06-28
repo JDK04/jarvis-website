@@ -104,7 +104,7 @@
   const INTRO_LINES = [
     { text: 'Good evening.',                   pause: 1100 },
     { text: '',                                 pause: 350  },
-    { text: 'I am J.A.R.V.I.S.',               pause: 1400 },
+    { text: 'I am T.H.E.O.',                    pause: 1400 },
     { text: '',                                 pause: 350  },
     { text: 'Your personal AI system.',         pause: 1100 },
     { text: '',                                 pause: 250  },
@@ -804,7 +804,7 @@
   jCtx.font = '900 88px "Orbitron","Courier New",monospace';
   jCtx.fillStyle = '#00d4ff';
   jCtx.textAlign = 'center'; jCtx.textBaseline = 'middle';
-  jCtx.fillText('J.A.R.V.I.S', 512, 100);
+  jCtx.fillText('T.H.E.O', 512, 100);
   const jarvisTitle = new THREE.Sprite(new THREE.SpriteMaterial({
     map:new THREE.CanvasTexture(jCanvas), transparent:true, opacity:0,
     blending:THREE.AdditiveBlending, depthWrite:false,
@@ -821,7 +821,7 @@
   jSubCtx.font = '500 22px "Share Tech Mono","Courier New",monospace';
   jSubCtx.fillStyle = 'rgba(0,180,220,0.78)';
   jSubCtx.textAlign = 'center'; jSubCtx.textBaseline = 'middle';
-  jSubCtx.fillText('YOUR AI LIFE INTELLIGENCE SYSTEM', 384, 28);
+  jSubCtx.fillText('THE HYBRID ENTREPRENEUR OPTIMIZER', 384, 28);
   const jarvisSub = new THREE.Sprite(new THREE.SpriteMaterial({
     map:new THREE.CanvasTexture(jSubCanvas), transparent:true, opacity:0,
     blending:THREE.AdditiveBlending, depthWrite:false,
@@ -916,7 +916,7 @@
     { pct:.56,  fired:false, text:'What if that intelligence could be extended? Amplified. Given to you, on demand.' },
     { pct:.70,  fired:false, text:'Every conversation. Every task. Every goal. Flowing. Thinking. Learning. For you.' },
     { pct:.83,  fired:false, text:'At a scale beyond what any human could manage alone.' },
-    { pct:.94,  fired:false, text:'Meet Jarvis.' },
+    { pct:.94,  fired:false, text:'Meet T.H.E.O.' },
   ];
 
   const tl = gsap.timeline({
