@@ -136,7 +136,6 @@
     // Play chime and first Jarvis line right as intro fades
     if (audioWanted) {
       playChime();
-      setTimeout(() => jarvisSpeak('Good evening. All systems are operational. Let the journey begin.'), 800);
     }
     await delay(800);
     introOverlay.style.display = 'none';
@@ -277,7 +276,6 @@
     if (audioCtx.state === 'suspended') audioCtx.resume();
     soundBtn.classList.add('active');
     playChime();
-    setTimeout(() => jarvisSpeak('Good evening. All systems are operational.'), 600);
   });
 
   // Hover sounds on nav links
@@ -286,7 +284,6 @@
   });
   document.getElementById('cta-submit').addEventListener('click', () => {
     playChime();
-    jarvisSpeak('Excellent. Initiating early access protocol.');
   });
 
   // ══════════════════════════════════════════════════════════════
@@ -361,14 +358,66 @@
   scene.add(kLight, fLight, wLight);
 
   // ══════════════════════════════════════════════════════════════
-  // NEBULA BACKGROUND
+  // BACKGROUND — deep space with layered nebula clouds + stars
   // ══════════════════════════════════════════════════════════════
+
+  // Backdrop sphere
   scene.add(Object.assign(new THREE.Mesh(
     new THREE.SphereGeometry(400, 32, 32),
-    new THREE.MeshBasicMaterial({ color: 0x000510, side: THREE.BackSide })
+    new THREE.MeshBasicMaterial({ color: 0x00020a, side: THREE.BackSide })
   )));
 
-  // ── STAR FIELD ───────────────────────────────────────────────
+  // Nebula cloud — large, billowing colour smear painted with a
+  // custom shader directly on the inside of a sphere.
+  const nebulaMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uT: { value: 0 } },
+    vertexShader: `
+      varying vec3 vPos;
+      void main() { vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
+    `,
+    fragmentShader: `
+      varying vec3 vPos;
+      uniform float uT;
+      float hash(vec3 p){ return fract(sin(dot(p,vec3(127.1,311.7,74.7)))*43758.5453); }
+      float noise(vec3 p){
+        vec3 i=floor(p); vec3 f=fract(p); f=f*f*(3.-2.*f);
+        return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+                   mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);
+      }
+      float fbm(vec3 p){
+        float v=0.; float a=.5;
+        for(int i=0;i<5;i++){ v+=a*noise(p); p=p*2.1+vec3(1.7,9.2,4.3); a*=.5; }
+        return v;
+      }
+      void main(){
+        vec3 d = normalize(vPos);
+        float n1 = fbm(d * 3.2 + vec3(uT*.008, 0., uT*.005));
+        float n2 = fbm(d * 5.8 - vec3(0., uT*.006, uT*.004));
+        float n3 = fbm(d * 2.1 + vec3(uT*.003));
+
+        // Deep blue-purple nebula bands
+        vec3 col  = vec3(0.02, 0.06, 0.22) * pow(n1, 1.4);
+        // Cyan wisps
+        col += vec3(0.00, 0.18, 0.35) * pow(n2, 2.0);
+        // Faint magenta tint in the far distance
+        col += vec3(0.08, 0.00, 0.14) * pow(n3, 2.5);
+        // Bright core vein
+        float vein = pow(max(0., fbm(d*8.+vec3(0,uT*.01,0)) - 0.42), 3.0);
+        col += vec3(0.0, 0.4, 0.7) * vein * 0.6;
+
+        float alpha = clamp(dot(col, vec3(0.6)), 0.0, 0.55);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
+  });
+  const nebulaUniforms = nebulaMat.uniforms;
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(380, 48, 32), nebulaMat));
+
+  // ── STAR FIELD — 5 layers, varied colour temperature ─────────
   function stars(n, spread, sz, op, col) {
     const p = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -384,120 +433,84 @@
       sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
   }
-  const s1 = stars(2200, 500, 0.10, 0.65, 0x88bbff);
-  const s2 = stars(600,  300, 0.20, 0.40, 0x0088ff);
-  scene.add(s1, s2);
+  const s1 = stars(3000, 500, 0.09, 0.70, 0xaaccff); // cool white-blue
+  const s2 = stars(800,  300, 0.18, 0.45, 0x0077ff);  // bright blue
+  const s3 = stars(400,  400, 0.28, 0.25, 0x00ccff);  // cyan giants
+  const s4 = stars(200,  350, 0.40, 0.15, 0xffffff);  // white supergiants
+  const s5 = stars(600,  250, 0.11, 0.20, 0x4400aa);  // faint purple
+  scene.add(s1, s2, s3, s4, s5);
 
-  // ── FLOATING MEDIUM PARTICLES ────────────────────────────────
-  const MIC = 900;
+  // ── FLOATING VOLUMETRIC DUST ──────────────────────────────────
+  const MIC = 1400;
   const micBuf = new Float32Array(MIC * 3);
   for (let i = 0; i < MIC; i++) {
-    micBuf[i*3]   = (Math.random()-.5)*40;
-    micBuf[i*3+1] = (Math.random()-.5)*40;
-    micBuf[i*3+2] = (Math.random()-.5)*20;
+    micBuf[i*3]   = (Math.random()-.5)*50;
+    micBuf[i*3+1] = (Math.random()-.5)*50;
+    micBuf[i*3+2] = (Math.random()-.5)*25;
   }
   const micGeo = new THREE.BufferGeometry();
   micGeo.setAttribute('position', new THREE.BufferAttribute(micBuf, 3));
   const micPts = new THREE.Points(micGeo, new THREE.PointsMaterial({
-    color: 0x004466, size: 0.06, transparent: true, opacity: 0.45,
+    color: 0x002244, size: 0.07, transparent: true, opacity: 0.35,
     map: softGlowTex, alphaTest: 0.005,
     sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
   scene.add(micPts);
 
   // ══════════════════════════════════════════════════════════════
-  // PHASE 1 — HUMAN HEAD  (custom holographic GLSL shader)
+  // PHASE 1 — HUMAN HEAD  (holographic lathe scan)
   // ══════════════════════════════════════════════════════════════
   const headGroup = new THREE.Group();
   scene.add(headGroup);
 
-  // Uniforms shared across the shader and updated every frame
-  const holoUniforms = {
-    uTime:    { value: 0 },
-    uOpacity: { value: 1 },
-  };
-  let headScanRange   = 2.6;
-  let headParticleMat = null;
+  const HP_PROFILE = [
+    [0.00,-0.92],[0.18,-0.88],[0.50,-0.78],[0.70,-0.60],
+    [0.82,-0.40],[0.88,-0.15],[0.92, 0.15],[0.90, 0.50],
+    [0.82, 0.85],[0.60, 1.15],[0.28, 1.35],[0.00, 1.45],
+  ];
+  const HEAD_SCALE = 2.8;
+  const headCenterY = (1.45 + (-0.92)) / 2;
+  const headPts = HP_PROFILE.map(([r, y]) =>
+    new THREE.Vector2(r * HEAD_SCALE, (y - headCenterY) * HEAD_SCALE)
+  );
+  const headGeo = new THREE.LatheGeometry(headPts, 28);
 
-  // ── Vertex shader ─────────────────────────────────────────────
-  const holoVS = `
-    varying vec3 vNormal;
-    varying vec3 vViewPos;
-    varying vec2 vUv;
-    uniform float uTime;
+  const headSolidMat = new THREE.MeshStandardMaterial({
+    color:0x001833, emissive:0x000d1a, emissiveIntensity:.3,
+    metalness:.6, roughness:.3, transparent:true, opacity:.06, side:THREE.DoubleSide,
+  });
+  const headWireMat = new THREE.MeshBasicMaterial({
+    color:0x00aeff, wireframe:true, transparent:true, opacity:.38,
+  });
+  const headSolid = new THREE.Mesh(headGeo, headSolidMat);
+  const headWire  = new THREE.Mesh(headGeo, headWireMat);
+  headSolid.scale.z = headWire.scale.z = 0.78;
 
-    void main() {
-      vNormal  = normalize(normalMatrix * normal);
-      vViewPos = (modelViewMatrix * vec4(position, 1.0)).xyz;
-      vUv      = uv;
-
-      // Micro-glitch: rare horizontal vertex snap, looks like signal corruption
-      vec3 p = position;
-      float rng = fract(sin(dot(
-        vec2(floor(uTime * 5.5), floor(position.y * 9.0)),
-        vec2(127.1, 311.7)
-      )) * 43758.5453);
-      float glitch = step(0.987, rng);
-      p.x += glitch * sin(uTime * 46.0) * 0.042;
-
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-    }
-  `;
-
-  // ── Fragment shader ───────────────────────────────────────────
-  const holoFS = `
-    varying vec3 vNormal;
-    varying vec3 vViewPos;
-    varying vec2 vUv;
-    uniform float uTime;
-    uniform float uOpacity;
-
-    float hash(vec2 p) {
-      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-    }
-
-    void main() {
-      vec3 V = normalize(-vViewPos);
-
-      // Fresnel — silhouette edges burn bright cyan like a real hologram
-      float fr = pow(1.0 - clamp(dot(vNormal, V), 0.0, 1.0), 2.4);
-
-      // Scanlines — fine horizontal bands drifting upward
-      float sc = sin(vViewPos.y * 54.0 + uTime * 2.1) * 0.5 + 0.5;
-      sc = pow(sc, 7.0);
-
-      // Data-rush bars — fast bright strips flashing across the face
-      float bar  = step(0.974, sin(vViewPos.y * 9.2 - uTime * 5.0));
-      float bar2 = step(0.981, sin(vViewPos.y * 4.3 + uTime * 2.3)) * 0.5;
-
-      // Fine noise grain
-      float n = hash(vUv + vec2(uTime * 0.017)) * 0.055;
-
-      // Color
-      vec3 col = vec3(0.0, 0.18, 0.45);               // deep blue body
-      col = mix(col, vec3(0.0, 0.78, 1.0), fr);        // cyan fresnel edge glow
-      col += vec3(0.0, 0.42, 0.82) * sc * 0.48;        // blue scanline tint
-      col += vec3(0.35, 0.94, 1.0) * (bar + bar2);     // bright data flashes
-      col += n;
-
-      // Alpha — mostly transparent, hot at edges and data events
-      float a = fr * 0.90 + sc * 0.22 + (bar + bar2) * 0.68 + 0.035;
-      gl_FragColor = vec4(col, clamp(a, 0.0, 1.0) * uOpacity);
-    }
-  `;
-
-  // Scan ring
+  // Scan ring — sweeps vertically, creates sci-fi "analysis" read
   const scanRingMat = new THREE.MeshBasicMaterial({
     color:0x00ffff, transparent:true, opacity:.9, blending:THREE.AdditiveBlending,
   });
   const scanRing = new THREE.Mesh(
-    new THREE.TorusGeometry(1.6, 0.012, 8, 80), scanRingMat
+    new THREE.TorusGeometry(3.0, 0.012, 8, 80), scanRingMat
   );
   scanRing.rotation.x = Math.PI / 2;
-  headGroup.add(scanRing);
 
-  // Concentric HUD rings
-  const hudRingMats = [2.2, 2.8, 3.5].map((r, i) => {
+  // Particles sampled from LatheGeometry vertices
+  const hpArrSrc = headGeo.attributes.position.array;
+  const hpArr    = new Float32Array(hpArrSrc.length);
+  for (let i = 0; i < hpArrSrc.length; i++) hpArr[i] = hpArrSrc[i];
+  for (let i = 2; i < hpArr.length; i += 3) hpArr[i] *= 0.78;
+  const headParticleGeo = new THREE.BufferGeometry();
+  headParticleGeo.setAttribute('position', new THREE.BufferAttribute(hpArr, 3));
+  const headParticleMat = new THREE.PointsMaterial({
+    color:0x00ccff, size:.065, transparent:true, opacity:.7,
+    map:softGlowTex, alphaTest:.005,
+    sizeAttenuation:true, blending:THREE.AdditiveBlending, depthWrite:false,
+  });
+  const headParticles = new THREE.Points(headParticleGeo, headParticleMat);
+
+  // Concentric HUD rings (thin, dim — purely atmospheric)
+  const hudRingMats = [3.6, 4.4, 5.3].map((r, i) => {
     const mat = new THREE.MeshBasicMaterial({
       color:0x003366, transparent:true, opacity:0.28 - i*.07,
       blending:THREE.AdditiveBlending,
@@ -508,105 +521,7 @@
     return mat;
   });
 
-  // ── Surface-sampling utility ──────────────────────────────────
-  // Distributes N particles uniformly across mesh triangles using
-  // area-weighted barycentric sampling — far denser and more
-  // uniform than just copying vertex positions.
-  function sampleSurface(geometry, n) {
-    const pos = geometry.attributes.position;
-    const idx = geometry.index ? geometry.index.array : null;
-    const triCount = idx ? idx.length / 3 : Math.floor(pos.count / 3);
-    const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
-    const areas = new Float32Array(triCount);
-    let total = 0;
-    for (let i = 0; i < triCount; i++) {
-      const a = idx ? idx[i*3]   : i*3;
-      const b = idx ? idx[i*3+1] : i*3+1;
-      const c = idx ? idx[i*3+2] : i*3+2;
-      vA.fromBufferAttribute(pos, a);
-      vB.fromBufferAttribute(pos, b);
-      vC.fromBufferAttribute(pos, c);
-      areas[i] = vB.clone().sub(vA).cross(vC.clone().sub(vA)).length() * .5;
-      total += areas[i];
-    }
-    const cdf = new Float32Array(triCount);
-    cdf[0] = areas[0] / total;
-    for (let i = 1; i < triCount; i++) cdf[i] = cdf[i-1] + areas[i] / total;
-
-    const out = new Float32Array(n * 3);
-    for (let s = 0; s < n; s++) {
-      const r = Math.random();
-      let tri = triCount - 1;
-      for (let i = 0; i < triCount; i++) { if (r <= cdf[i]) { tri = i; break; } }
-      const a = idx ? idx[tri*3]   : tri*3;
-      const b = idx ? idx[tri*3+1] : tri*3+1;
-      const c = idx ? idx[tri*3+2] : tri*3+2;
-      vA.fromBufferAttribute(pos, a);
-      vB.fromBufferAttribute(pos, b);
-      vC.fromBufferAttribute(pos, c);
-      let u = Math.random(), v = Math.random();
-      if (u + v > 1) { u = 1-u; v = 1-v; }
-      const w = 1-u-v;
-      out[s*3]   = vA.x*w + vB.x*u + vC.x*v;
-      out[s*3+1] = vA.y*w + vB.y*u + vC.y*v;
-      out[s*3+2] = vA.z*w + vB.z*u + vC.z*v;
-    }
-    return out;
-  }
-
-  // Load the head model
-  const gltfLoader = new THREE.GLTFLoader();
-  gltfLoader.load(
-    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r134/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb',
-    function (gltf) {
-      const model = gltf.scene;
-      model.scale.setScalar(2.8);
-
-      const box    = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-      headGroup.add(model);
-
-      const worldH = (box.max.y - box.min.y) * 2.8;
-      const worldW = (box.max.x - box.min.x) * 2.8;
-      headScanRange = worldH * 0.52;
-      scanRing.geometry.dispose();
-      scanRing.geometry = new THREE.TorusGeometry(worldW * 0.55, 0.012, 8, 80);
-
-      const meshes = [];
-      model.traverse(child => { if (child.isMesh) meshes.push(child); });
-
-      meshes.forEach(child => {
-        // Custom holographic GLSL shader — replaces all standard materials
-        child.material = new THREE.ShaderMaterial({
-          vertexShader:   holoVS,
-          fragmentShader: holoFS,
-          uniforms:       holoUniforms,
-          transparent:    true,
-          side:           THREE.DoubleSide,
-          depthWrite:     false,
-          blending:       THREE.AdditiveBlending,
-        });
-
-        // 12 000 particles uniformly sampled across the face surface
-        const sampled = sampleSurface(child.geometry, 12000);
-        const ptGeo   = new THREE.BufferGeometry();
-        ptGeo.setAttribute('position', new THREE.BufferAttribute(sampled, 3));
-        headParticleMat = new THREE.PointsMaterial({
-          color: 0x00ccff, size: .013, transparent: true, opacity: .5,
-          map: softGlowTex, alphaTest: .005,
-          sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
-        });
-        const pts = new THREE.Points(ptGeo, headParticleMat);
-        pts.position.copy(child.position);
-        pts.rotation.copy(child.rotation);
-        pts.scale.copy(child.scale);
-        child.parent.add(pts);
-      });
-    },
-    undefined,
-    function (err) { console.warn('GLTF head failed to load:', err); }
-  );
+  headGroup.add(headSolid, headWire, scanRing, headParticles);
 
   // ══════════════════════════════════════════════════════════════
   // PHASE 2 — BRAIN  (folded sphere + neuron network)
@@ -1020,7 +935,6 @@
           if (!vt.fired && self.progress >= vt.pct) {
             vt.fired = true;
             playWhoosh();
-            setTimeout(() => jarvisSpeak(vt.text), 400);
           }
         });
       },
@@ -1128,7 +1042,7 @@
     { trigger:'#cta',         start:'top 60%', voice:'The future belongs to those who are ready for it.' },
   ].forEach(n => ScrollTrigger.create({
     trigger:n.trigger, start:n.start,
-    onEnter() { playWhoosh(); setTimeout(()=>jarvisSpeak(n.voice),500); },
+    onEnter() { playWhoosh(); },
   }));
 
   // ══════════════════════════════════════════════════════════════
@@ -1168,13 +1082,12 @@
       headGroup.visible = true;
       headGroup.rotation.y = t * .16;
       headGroup.rotation.x = Math.sin(t*.1) * .045;
-      // Feed time + opacity into the GLSL shader every frame
-      holoUniforms.uTime.value    = t;
-      holoUniforms.uOpacity.value = state.headOpacity;
-      if (headParticleMat) headParticleMat.opacity = state.headOpacity * .5;
-      scanRingMat.opacity = state.headOpacity * .9;
+      headSolidMat.opacity     = state.headOpacity * .06;
+      headWireMat.opacity      = state.headOpacity * .38;
+      headParticleMat.opacity  = state.headOpacity * .7;
+      scanRingMat.opacity      = state.headOpacity * .9;
       hudRingMats.forEach((m,i) => { m.opacity = state.headOpacity * (0.28 - i*.07); });
-      scanRing.position.y = Math.sin(t * .7) * headScanRange;
+      scanRing.position.y = Math.sin(t * .7) * (HEAD_SCALE * 0.95);
     } else {
       headGroup.visible = false;
     }
@@ -1271,8 +1184,12 @@
     }
 
     // ── BACKGROUND ────────────────────────────────────────────
+    nebulaUniforms.uT.value = t;
     s1.rotation.y += .000045;
     s2.rotation.y -= .000025;
+    s3.rotation.y += .000018;
+    s4.rotation.x += .000012;
+    s5.rotation.y -= .000010;
     const mp = micGeo.attributes.position.array;
     for (let i = 0; i < MIC; i++) mp[i*3+1] += Math.sin(t*.4 + i*.4) * .0004;
     micGeo.attributes.position.needsUpdate = true;
